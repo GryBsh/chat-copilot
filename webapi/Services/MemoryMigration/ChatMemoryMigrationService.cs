@@ -11,6 +11,7 @@ using CopilotChat.WebApi.Storage;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.KernelMemory;
+using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Memory;
 
 namespace CopilotChat.WebApi.Services.MemoryMigration;
@@ -21,6 +22,7 @@ namespace CopilotChat.WebApi.Services.MemoryMigration;
 public class ChatMemoryMigrationService : IChatMemoryMigrationService
 {
     private readonly ILogger<ChatMemoryMigrationService> _logger;
+    private readonly IOptions<DocumentMemoryOptions> _options;
     private readonly ISemanticTextMemory _memory;
     private readonly IKernelMemory _memoryClient;
     private readonly ChatSessionRepository _chatSessionRepository;
@@ -41,6 +43,7 @@ public class ChatMemoryMigrationService : IChatMemoryMigrationService
         SemanticKernelProvider provider)
     {
         this._logger = logger;
+        this._options = documentMemoryOptions;
         this._promptOptions = promptOptions.Value;
         this._memoryClient = memoryClient;
         this._chatSessionRepository = chatSessionRepository;
@@ -50,11 +53,11 @@ public class ChatMemoryMigrationService : IChatMemoryMigrationService
     }
 
     ///<inheritdoc/>
-    public async Task MigrateAsync(CancellationToken cancellationToken = default)
+    public async Task MigrateAsync(Kernel kernel, CancellationToken cancellationToken = default)
     {
         try
         {
-            await this.InternalMigrateAsync(cancellationToken);
+            await this.InternalMigrateAsync(kernel, cancellationToken);
         }
         catch (Exception exception) when (!exception.IsCriticalException())
         {
@@ -62,9 +65,9 @@ public class ChatMemoryMigrationService : IChatMemoryMigrationService
         }
     }
 
-    private async Task InternalMigrateAsync(CancellationToken cancellationToken = default)
+    private async Task InternalMigrateAsync(Kernel kernel, CancellationToken cancellationToken = default)
     {
-        var collectionNames = (await this._memory.GetCollectionsAsync(cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var collectionNames = (await this._memory.GetCollectionsAsync(kernel, cancellationToken)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var tokenMemory = await GetTokenMemory(cancellationToken);
         if (tokenMemory != null)
@@ -106,7 +109,7 @@ public class ChatMemoryMigrationService : IChatMemoryMigrationService
                     var indexName = $"{chat.Id}-{memoryType}";
                     if (collectionNames.Contains(indexName))
                     {
-                        var memories = await this._memory.SearchAsync(indexName, "*", limit: 10000, minRelevanceScore: 0, withEmbeddings: false, cancellationToken).ToArrayAsync(cancellationToken);
+                        var memories = await this._memory.SearchAsync(indexName, "*", limit: 10000, minRelevanceScore: 0, withEmbeddings: false, kernel, cancellationToken).ToArrayAsync(cancellationToken);
 
                         foreach (var memory in memories)
                         {
@@ -122,7 +125,7 @@ public class ChatMemoryMigrationService : IChatMemoryMigrationService
         {
             try
             {
-                return await this._memory.GetAsync(this._globalIndex, ChatMigrationMonitor.MigrationKey, withEmbedding: false, cancellationToken);
+                return await this._memory.GetAsync(this._globalIndex, ChatMigrationMonitor.MigrationKey, withEmbedding: false, kernel, cancellationToken);
             }
             catch (Exception ex) when (!ex.IsCriticalException())
             {
@@ -133,7 +136,7 @@ public class ChatMemoryMigrationService : IChatMemoryMigrationService
         // Inline function to write the token memory
         async Task SetTokenMemory(string token, CancellationToken cancellationToken)
         {
-            await this._memory.SaveInformationAsync(this._globalIndex, token, ChatMigrationMonitor.MigrationKey, description: null, additionalMetadata: null, cancellationToken);
+            await this._memory.SaveInformationAsync(this._globalIndex, token, ChatMigrationMonitor.MigrationKey, description: null, additionalMetadata: null, kernel, cancellationToken);
         }
 
         async Task RemoveMemorySourcesAsync()

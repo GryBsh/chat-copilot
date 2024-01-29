@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace CopilotChat.WebApi.Options;
@@ -58,4 +59,13 @@ public class DocumentMemoryOptions
     /// </summary>
     [Range(0, int.MaxValue)]
     public int FileCountLimit { get; set; } = 10;
+
+    /*
+    public List<string> StepNames { get; set; } = new() {
+        "extract",
+        "partition",
+        "gen_embeddings",
+        "save_embeddings"
+    };
+    */
 }

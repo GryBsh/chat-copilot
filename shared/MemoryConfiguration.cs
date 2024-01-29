@@ -11,3 +11,4 @@ public static class MemoryConfiguration
     public const string OrchestrationTypeDistributed = "Distributed";
     public const string NoneType = "None";
 }
+

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CopilotChat.Shared;
 using CopilotChat.WebApi.Models.Storage;
+using CopilotChat.WebApi.Options;
 using CopilotChat.WebApi.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,7 +33,7 @@ internal static class ISemanticMemoryClientExtensions
 
         var memoryConfig = serviceProvider.GetRequiredService<IOptions<KernelMemoryConfig>>().Value;
 
-        var ocrType = memoryConfig.ImageOcrType;
+        var ocrType = memoryConfig.TextGeneratorType;
         var hasOcr = !string.IsNullOrWhiteSpace(ocrType) && !ocrType.Equals(MemoryConfiguration.NoneType, StringComparison.OrdinalIgnoreCase);
 
         var pipelineType = memoryConfig.DataIngestion.OrchestrationType;
@@ -54,7 +55,7 @@ internal static class ISemanticMemoryClientExtensions
             }
         }
 
-        IKernelMemory memory = memoryBuilder.FromConfiguration(
+        IKernelMemory memory = memoryBuilder.FromMemoryConfiguration(
             memoryConfig,
             appBuilder.Configuration
         ).Build();
@@ -167,7 +168,7 @@ internal static class ISemanticMemoryClientExtensions
                     // Document file name not relevant, but required.
                     new DocumentUploadRequest.UploadedFile("memory.txt", stream)
                 },
-            Steps = pipelineSteps,
+            Steps = pipelineSteps
         };
 
         uploadRequest.Tags.Add(MemoryTags.TagChatId, chatId);

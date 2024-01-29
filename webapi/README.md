@@ -93,7 +93,7 @@ To enable sequential planner,
 1. If using `gpt-3.5-turbo`: change [CopilotChatPlanner.cs](Plugins/Chat/CopilotChatPlanner.cs) to initialize SequentialPlanner with a RelevancyThreshold\*.
    - Add `using` statement to top of file:
      ```
-     using Microsoft.SemanticKernel.Planning.Sequential;
+     using Microsoft.SemanticKernel.Planning;
      ```
    - The `CreatePlanAsync` method should return the following line if `this._plannerOptions?.Type == "Sequential"` is true:
      ```
@@ -301,26 +301,18 @@ Alternatively,
     </Content>
    ```
 
-   You will also need to include a line for each skprompt.txt file you have for you plugins to ensure they are included in the build output.
-
-   ```xml
-   <None Update="Plugins\SemanticPlugins\{PluginName}\skprompt.txt">
-     <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-   </None>
-   ```
-
 3. Change the respective directory option to use an absolute path or a different base path, but make sure that the files are accessible from that location.
 
 ### Add Custom Setup to Chat Copilot's Kernel
 
-Chat Copilot's Semantic Kernel can be customized with additional plugins or settings by using a custom hook that performs any complimentary setup of the kernel. A custom hook is a delegate that takes an `IServiceProvider` and an `IKernel` as parameters and performs any desired actions on the kernel, such as registering additional plugins, setting kernel options, adding dependency injections, importing data, etc. To use a custom hook, you can pass it as an argument to the `AddKernelSetupHook` call in the `AddSemanticKernelServices` method of `SemanticKernelExtensions.cs`.
+Chat Copilot's Semantic Kernel can be customized with additional plugins or settings by using a custom hook that performs any complimentary setup of the kernel. A custom hook is a delegate that takes an `IServiceProvider` and an `Kernel` as parameters and performs any desired actions on the kernel, such as registering additional plugins, setting kernel options, adding dependency injections, importing data, etc. To use a custom hook, you can pass it as an argument to the `AddKernelSetupHook` call in the `AddSemanticKernelServices` method of `SemanticKernelExtensions.cs`.
 
 For example, the following code snippet shows how to create a custom hook that registers a plugin called MyPlugin and passes it to `AddKernelSetupHook`:
 
 ```c#
 
 // Define a custom hook that registers MyPlugin with the kernel
-private static Task MyCustomSetupHook(IServiceProvider sp, IKernel kernel)
+private static Task MyCustomSetupHook(IServiceProvider sp, Kernel kernel)
 {
    // Import your plugin into the kernel with the name "MyPlugin"
    kernel.ImportFunctions(new MyPlugin(), nameof(MyPlugin));
@@ -352,7 +344,7 @@ internal static IServiceCollection AddSemanticKernelServices(this IServiceCollec
 
 The planner uses a separate kernel instance that can be configured with plugins that are specific to the planning process. Note that these plugins will be persistent across all chat requests.
 
-To customize the planner's kernel, you can use a custom hook that registers plugins at build time. A custom hook is a delegate that takes an `IServiceProvider` and an `IKernel` as parameters and performs any desired actions on the kernel. By default, the planner will register plugins using `SemanticKernelExtensions.RegisterPluginsAsync` to load files from the `Service.SemanticPluginsDirectory` and `Service.NativePluginsDirectory` option values in `appsettings.json`.
+To customize the planner's kernel, you can use a custom hook that registers plugins at build time. A custom hook is a delegate that takes an `IServiceProvider` and an `Kernel` as parameters and performs any desired actions on the kernel. By default, the planner will register plugins using `SemanticKernelExtensions.RegisterPluginsAsync` to load files from the `Service.SemanticPluginsDirectory` and `Service.NativePluginsDirectory` option values in `appsettings.json`.
 
 To use a custom hook, you can pass it as an argument to the `AddPlannerSetupHook` call in the `AddPlannerServices` method of `SemanticKernelExtensions.cs`, which will invoke the hook after the planner's kernel is created. See section above for an example of a custom hook function.
 

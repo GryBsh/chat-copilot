@@ -4,6 +4,7 @@ using System;
 using CopilotChat.Shared;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.KernelMemory;
@@ -15,9 +16,12 @@ using Microsoft.KernelMemory.Diagnostics;
 
 var builder = WebApplication.CreateBuilder();
 
+
+var config = new KernelMemoryConfig();
+builder.Configuration.BindSection(MemoryConfiguration.KernelMemorySection, config);
 IKernelMemory memory =
     new KernelMemoryBuilder(builder.Services)
-        .FromAppSettings()
+        .FromMemoryConfiguration(config, builder.Configuration)
         .WithCustomOcr(builder.Configuration)
         .Build();
 

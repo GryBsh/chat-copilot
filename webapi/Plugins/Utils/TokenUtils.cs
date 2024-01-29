@@ -4,13 +4,11 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.SemanticKernel.AI;
-using Microsoft.SemanticKernel.AI.ChatCompletion;
-using Microsoft.SemanticKernel.Connectors.AI.OpenAI.AzureSdk;
-using Microsoft.SemanticKernel.Orchestration;
-using ChatCompletionContextMessages = Microsoft.SemanticKernel.AI.ChatCompletion.ChatHistory;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+using ChatCompletionContextMessages = Microsoft.SemanticKernel.ChatCompletion.ChatHistory;
 
 namespace CopilotChat.WebApi.Plugins.Utils;
 
@@ -66,11 +64,11 @@ public static class TokenUtils
     /// Gets the total token usage from a Chat or Text Completion result context and adds it as a variable to response context.
     /// </summary>
     /// <param name="result">Result context from chat model</param>
-    /// <param name="chatContext">Context maintained during response generation.</param>
+    /// <param name="kernelArguments">Arguments maintained during response generation.</param>
     /// <param name="logger">The logger instance to use for logging errors.</param>
     /// <param name="functionName">Name of the function that invoked the chat completion.</param>
     /// <returns> true if token usage is found in result context; otherwise, false.</returns>
-    internal static void GetFunctionTokenUsage(FunctionResult result, SKContext chatContext, ILogger logger, string? functionName = null)
+    internal static void GetFunctionTokenUsage(FunctionResult result, KernelArguments kernelArguments, ILogger logger, string? functionName = null)
     {
         try
         {
@@ -80,15 +78,36 @@ public static class TokenUtils
                 return;
             }
 
-            var modelResults = result.GetModelResults();
-            if (modelResults.IsNullOrEmpty())
+            if (result.Metadata is null)
+            {
+                logger.LogError("No metadata provided to capture usage details.");
+                return;
+            }
+
+
+            if (!result.Metadata.TryGetValue("Usage", out object? usageObject) || usageObject is null)
             {
                 logger.LogError("Unable to determine token usage for {0}", functionKey);
                 return;
             }
 
-            var tokenUsage = modelResults!.First().GetResult<ChatModelResult>().Usage.TotalTokens;
-            chatContext.Variables.Set(functionKey!, tokenUsage.ToString(CultureInfo.InvariantCulture));
+            var tokenUsage = 0;
+            try
+            {
+                var jsonObject = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(usageObject));
+                tokenUsage = jsonObject.GetProperty("TotalTokens").GetInt32();
+            }
+            catch (Exception ex) when (ex is KeyNotFoundException)
+            {
+                logger.LogError("Usage details not found in model result.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error while parsing usage details from model result.");
+                throw;
+            }
+
+            kernelArguments.Add(functionKey!, tokenUsage.ToString(CultureInfo.InvariantCulture));
         }
         catch (Exception e)
         {
