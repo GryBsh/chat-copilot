@@ -2,6 +2,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using CopilotChat.Shared.Documents;
 using Microsoft.Extensions.Configuration;
@@ -133,6 +134,14 @@ public sealed class ServiceConfiguration
             throw new ConfigurationException($"appsettings.json not found. Directory: {settingsDirectory}");
         }
 
+        var envSettings = Directory.EnumerateFiles(settingsDirectory, "appsettings.*.json", SearchOption.TopDirectoryOnly)
+                                   .FirstOrDefault(f => !f.EndsWith($"{env}.json", StringComparison.OrdinalIgnoreCase));
+        if (envSettings != null)
+        {
+            builder.AddJsonFile(envSettings, optional: false);
+        }
+
+        /*
         if (env.Equals("development", StringComparison.OrdinalIgnoreCase))
         {
             var f1 = Path.Join(settingsDirectory, "appsettings.development.json");
@@ -160,6 +169,7 @@ public sealed class ServiceConfiguration
                 builder.AddJsonFile(f2, optional: false);
             }
         }
+        */
 
         // Support for environment variables overriding the config files
         builder.AddEnvironmentVariables();

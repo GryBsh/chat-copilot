@@ -93,7 +93,7 @@ public class DocumentExtractionHandler : IPipelineStepHandler
     /// Adds text to the builder.
     /// </summary>
     /// <remarks>
-    /// Splits plain text into pages of 48 lines per page by default.
+    /// Splits plain text into pages (48 lpp by default).
     /// Leaves other mime types untouched before adding to the builder.
     /// </remarks>
     /// <param name="builder">The content string builder</param>
