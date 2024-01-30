@@ -3,7 +3,7 @@
 using System;
 using System.IO;
 using System.Reflection;
-using CopilotChat.Shared.Ocr;
+using CopilotChat.Shared.Documents;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.KernelMemory;

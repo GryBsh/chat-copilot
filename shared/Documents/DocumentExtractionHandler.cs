@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -14,7 +15,7 @@ using Microsoft.KernelMemory.Configuration;
 using Microsoft.KernelMemory.Diagnostics;
 using Microsoft.KernelMemory.Pipeline;
 
-namespace CopilotChat.Shared.Ocr;
+namespace CopilotChat.Shared.Documents;
 
 /// <summary>
 /// A heavily modified version of the <see cref="Microsoft.KernelMemory.Handlers.TextExtractionHandler"/> 
@@ -66,43 +67,79 @@ public class DocumentExtractionHandler : IPipelineStepHandler
         }
     }
 
-    private static void PageFooter(StringBuilder strBldr, int page)
+    /// <summary>
+    /// Add the contextual decoration found in a page header.
+    /// </summary>
+    /// <param name="builder"></param>
+    /// <param name="page"></param>
+    protected static void PageHeader(StringBuilder builder, int page)
     {
-        strBldr.AppendLine();
-        strBldr.AppendLine($"PAGE {page}");
-        strBldr.AppendLine();
+       //TODO: Add Handlers for page parts and define symbols
     }
 
     /// <summary>
-    /// Creates 48 line pages with a footer for each page
-    /// from the text content of the file. Otherwise it 
-    /// returns the mime type of the text content and and adds it.
+    /// Add the contextual decoration found in a page footer.
     /// </summary>
-    /// <param name="mimeType"></param>
+    /// <param name="builder"></param>
+    /// <param name="page"></param>
+    private static void PageFooter(StringBuilder builder, int page)
+    {
+        builder.AppendLine();
+        builder.AppendLine($"PAGE {page}");
+        builder.AppendLine();
+    }
+
+    /// <summary>
+    /// Adds text to the builder.
+    /// </summary>
+    /// <remarks>
+    /// Splits plain text into pages of 48 lines per page by default.
+    /// Leaves other mime types untouched before adding to the builder.
+    /// </remarks>
+    /// <param name="builder">The content string builder</param>
+    /// <param name="mimeType">The mime type of the current file</param>
     /// <param name="fileContent"></param>
-    /// <param name="strBldr"></param>
-    /// <returns></returns>
-    private static string BuildStringFromText(string mimeType, BinaryData fileContent, StringBuilder strBldr)
+    /// <returns>The mime type of file</returns>
+    private static string AddText(StringBuilder builder, string mimeType, BinaryData fileContent, int lpp = 48)
     {
         if (mimeType != MimeTypes.PlainText)
         {
-            strBldr.Append(fileContent.ToString());
+            builder.Append(fileContent.ToString());
             return mimeType;
         }
 
-        int lpp = 48;
+        int page = 1;
         var lines = fileContent.ToString().Split('\n');
 
-        int page = 1;
         for (int i = 0; i < lines.Length; i += lpp)
         {
+            PageHeader(builder, page);
             foreach (var ln in lines.Skip(i).Take(lpp))
             {
-                strBldr.AppendLine(ln);
+                builder.AppendLine(ln);
             }
-            PageFooter(strBldr, page++);
+            PageFooter(builder, page++);
         }
         return MimeTypes.PlainText;
+
+    }
+
+    /// <summary>
+    /// Adds Azure Document Intelligence pages to the builder.
+    /// </summary>
+    /// <param name="builder">The content string builder</param>
+    /// <param name="pages">Analyzed pages</param>
+    private static void AddPages(StringBuilder builder, IReadOnlyList<DocumentPage> pages)
+    {
+        foreach (var page in pages)
+        {
+            PageHeader(builder, page.PageNumber);
+            foreach (var line in page.Lines)
+            {
+                builder.AppendLine(line.Content);
+            }
+            PageFooter(builder, page.PageNumber);
+        }
     }
 
     public async Task<(bool success, DataPipeline updatedPipeline)> InvokeAsync(DataPipeline pipeline, CancellationToken cancellationToken = default)
@@ -115,14 +152,14 @@ public class DocumentExtractionHandler : IPipelineStepHandler
             BinaryData fileContent = await this._orchestrator.ReadFileAsync(pipeline, sourceFile, cancellationToken).ConfigureAwait(false);
 
             string extractType = MimeTypes.PlainText;
-            var strBuilder = new StringBuilder();
+            StringBuilder strBuilder = new();
             switch (file.MimeType)
             {
                 case MimeTypes.PlainText:
                 case MimeTypes.MarkDown:
                 case MimeTypes.Json:
                     this._logger.LogDebug("Extracting text from `{}` file `{}`", file.MimeType, file.Name);
-                    extractType = BuildStringFromText(file.MimeType, fileContent, strBuilder);
+                    extractType = AddText(strBuilder, file.MimeType, fileContent);
                     break;
 
                 case MimeTypes.MsWord:
@@ -133,7 +170,7 @@ public class DocumentExtractionHandler : IPipelineStepHandler
                 case MimeTypes.ImagePng:
                 case MimeTypes.ImageTiff:
 
-                    this._logger.LogDebug("DocIntel extract from `{}` file `{}`", file.MimeType, file.Name);
+                    this._logger.LogDebug("Document Intelligence extract from `{}` file `{}`", file.MimeType, file.Name);
                     try
                     {
                         var operation = await this._docIntel.AnalyzeDocumentAsync(
@@ -146,14 +183,7 @@ public class DocumentExtractionHandler : IPipelineStepHandler
                         // Wait for the result
                         AnalyzeResult operationResponse = await operation.WaitForCompletionAsync(cancellationToken).ConfigureAwait(false);
 
-                        foreach (var page in operationResponse.Pages)
-                        {
-                            foreach (var line in page.Lines)
-                            {
-                                strBuilder.AppendLine(line.Content);
-                            }
-                            PageFooter(strBuilder, page.PageNumber);
-                        }
+                        AddPages(strBuilder, operationResponse.Pages);
 
                     }
                     catch (Exception ex)
